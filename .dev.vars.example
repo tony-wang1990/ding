@@ -1,0 +1,2 @@
+ADMIN_PASSWORD=请设置高强度管理员密码
+SESSION_SECRET=请使用 openssl rand -hex 32 生成
