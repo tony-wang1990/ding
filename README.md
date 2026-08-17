@@ -10,7 +10,7 @@
 
 - 在线页面：<https://ding.199060.xyz>
 - Shadowrocket 模块：<https://ding.199060.xyz/modules/wloc.module>
-- 图文教程：**[从安装到自部署的 21 步完整教程](docs/USER_GUIDE.md)**
+- 图文教程：**[从安装到自部署的 21 步完整教程](TUTORIAL.md)**
 - 管理入口：部署者自己的域名后加 `/admin`
 
 ## 功能
@@ -39,7 +39,7 @@ npm test
 npm run deploy
 ```
 
-完整的 Cloudflare 控制台图文步骤、自定义域名绑定、iPhone 安装、证书信任及故障排查均在 **[docs/USER_GUIDE.md](docs/USER_GUIDE.md)**。
+完整的 Cloudflare 控制台图文步骤、自定义域名绑定、iPhone 安装、证书信任及故障排查均在 **[TUTORIAL.md](TUTORIAL.md)**。
 
 ## 他人能否部署
 
