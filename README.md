@@ -2,50 +2,385 @@
 
 # 老王打卡
 
-基于 Apple WLOC 网络定位响应修改的中文选点工具，包含在线地图、搜索联想、常用地点、收藏、历史记录、管理后台、访问控制和 Cloudflare Workers 部署支持。
+一个面向 iPhone 的中文网络定位选点工具。项目通过 Shadowrocket 模块处理 Apple WLOC 网络定位请求，提供地图选点、地点搜索、坐标解析、收藏、历史记录、一键快捷指令和后台配置，并可部署到 Cloudflare Workers。
 
-> 仅用于开发测试、隐私研究和获得授权的场景。它修改的是 Apple 的 Wi-Fi/基站网络定位响应，不等同于硬件 GPS 模拟，也不保证所有 App 都采用该结果。
+在线站点：<https://ding.199060.xyz>
 
-## 直接使用
-
-- 在线页面：<https://ding.199060.xyz>
-- Shadowrocket 模块：<https://ding.199060.xyz/modules/wloc.module>
-- 图文教程：**[从安装到自部署的 21 步完整教程](#完整图文教程)**
-- 管理入口：部署者自己的域名后加 `/admin`
+> 本项目用于开发测试、定位接口研究和获得授权的场景。它处理的是 Apple Wi-Fi/基站网络定位结果，不是硬件 GPS 模拟；部分只使用 GPS、蓝牙信标、缓存位置或自有风控的应用可能不会采用该结果。
 
 ## 功能
 
-- 完整中文选点页，支持高德、Apple、Google、百度链接及坐标文本
-- 搜索联想、常用地点、收藏位置和定位历史
-- 动态生成 Shadowrocket 模块安装链接
-- 后台修改品牌、域名、公告、快捷指令与公共地点
-- 管理员密码和 HMAC 签名会话 Cookie
-- Cloudflare Workers + KV，支持自定义域名
-- GCJ-02 / WGS84 坐标换算与解析回归测试
+### 地图与选点
 
-## 自部署速览
+- 中文响应式页面，适配 iPhone Safari
+- 地图点击选点和标记定位
+- 卫星、标准、彩色、暗色等地图样式
+- WGS-84 与 GCJ-02 显示切换
+- 可设置坐标扰动半径
+- 保存、查询和清除当前生效坐标
+
+### 搜索与坐标解析
+
+- 地名搜索与搜索联想
+- 公共常用地点快捷选择
+- 解析 Apple、Google、高德和百度地图链接
+- 支持直接粘贴经纬度文本
+- 自动处理 WGS-84、GCJ-02、BD-09 和百度墨卡托坐标
+- 港澳台、境外坐标与中国大陆偏移范围分别处理
+
+### 收藏与历史
+
+- 收藏常用坐标并自定义名称
+- 将任意收藏设为默认地点
+- 在收藏列表中直接一键切换
+- 保存最近定位记录并快速复用
+- 收藏、默认地点和历史记录保存在当前浏览器本地
+
+### iOS 快捷指令
+
+- 一键切换到默认收藏地点
+- 一键清除保存坐标并恢复真实定位
+- 首页提供两条快捷指令的公开安装链接
+- 快捷执行页面包含参数校验和结果提示
+
+### 管理后台
+
+- 管理员密码登录和 HMAC 签名会话
+- 修改品牌名称、公开域名和首页公告
+- 修改两条快捷指令安装地址
+- 管理公共常用地点
+- 配置保存到 Cloudflare KV
+
+### 部署与维护
+
+- Cloudflare Workers 部署配置
+- Cloudflare Pages 兼容配置
+- 自定义域名支持
+- 动态生成 Shadowrocket 模块
+- 地图链接解析和坐标换算自动测试
+
+## 使用要求
+
+- iPhone 或 iPad
+- Shadowrocket，或兼容相同模块规则的代理工具
+- 可用的代理配置
+- 已启用项目模块
+- 已启用 HTTPS 解密，并信任由自己设备生成的 CA 证书
+- 使用 Safari 打开选点页面和安装快捷指令
+
+只应信任由自己在代理工具中生成的证书，不要安装来源不明的根证书。
+
+## 使用前必须看懂
+
+### 1. 谁负责“选地点”，谁负责“改位置”
+
+- 老王打卡网页、Apple 地图和高德地图都可以帮助选择目标地点；
+- Apple 地图和高德地图本身不能把手机改到目标位置；
+- 真正写入坐标的是老王打卡网页发出的保存请求，以及 Shadowrocket 中启用的 WLOC 模块；
+- 因此，从地图 App 选点后仍要把分享链接交给老王打卡解析并保存。
+
+### 2. “收藏”不是网站账号或云同步
+
+- 本项目没有普通用户注册和登录；
+- 每个人的收藏、默认收藏和历史只保存在自己手机的 Safari 中；
+- 网站后台看不到这些个人收藏；
+- 换手机、换浏览器、换域名或清除 Safari 网站数据后，原收藏不会自动出现。
+
+### 3. 一键切换到底读取哪里
+
+一键切换会自动打开 `https://ding.199060.xyz/?quick=default`，读取**当前这台 iPhone 的 Safari 为 `ding.199060.xyz` 保存的带 `★` 收藏**，然后自动写入该收藏的坐标。它不会登录服务器，也不会从 Cloudflare KV 查询个人收藏。
+
+所以，一键切换必须同时满足：
+
+1. 在同一台 iPhone 上操作；
+2. 使用 Safari 普通浏览模式打开过 `ding.199060.xyz`；
+3. 已在该网页收藏地点并点击“设默认”；
+4. 没有清除该网站的 Safari 数据；
+5. Shadowrocket、模块和 HTTPS 解密均处于可用状态。
+
+### 4. “保存成功”不等于目标 App 已经刷新
+
+“保存成功”只表示新坐标已写入 WLOC 模块。iOS 或目标 App 可能仍在使用旧缓存，需要退出 App、等待、重开定位服务或重启设备。不同 App 使用的定位来源也不同，并非所有 App 都一定采用 WLOC 结果。
+
+### 5. 第一次使用和日常使用不同
+
+- 第一次使用：安装模块 → 配置 HTTPS 解密和证书 → 选点 → 保存 → 验证；
+- 日常换新地点：打开网页选点 → 储存到设备；
+- 日常切换固定地点：直接运行“一键切换”；
+- 恢复正常位置：运行“一键恢复真实定位”，再刷新定位缓存。
+
+## 快速开始
+
+### 1. 安装模块
+
+用 iPhone Safari 打开 <https://ding.199060.xyz>，点击“安装小火箭模块”。
+
+模块直链：
+
+```text
+https://ding.199060.xyz/modules/wloc.module
+```
+
+如果没有自动跳转，请复制该地址，在 Shadowrocket 的模块页面手动添加，然后打开模块开关。
+
+### 2. 配置 HTTPS 解密
+
+在 Shadowrocket 当前配置中：
+
+1. 打开 HTTPS 解密。
+2. 生成并安装自己的 CA 证书。
+3. 打开 iOS“设置 → 通用 → 关于本机 → 证书信任设置”。
+4. 完全信任刚生成的证书。
+5. 保持 Shadowrocket 已连接、模块已启用。
+
+### 3. 选择一种改位置方式
+
+项目支持两种选点来源，但真正保存坐标的仍是“老王打卡”网页与 WLOC 模块。Apple 地图和高德地图本身不能修改系统定位，它们只能用来找到地点并提供分享链接。
+
+| 使用方式 | 在哪里选地点 | 如何写入坐标 | 适合场景 |
+| --- | --- | --- | --- |
+| 方式一：网页直接选点 | 老王打卡网页 | 点击“储存到设备” | 最简单，推荐新手使用 |
+| 方式二：地图 App 选点 | Apple 地图或高德地图 | 把分享链接粘贴到老王打卡解析后保存 | 已经在地图 App 中找到目标地点 |
+| 快捷指令：切换默认收藏 | iPhone 快捷指令 | 读取同一台手机 Safari 为 `ding.199060.xyz` 保存的 `★` 收藏 | 重复切换同一个地点 |
+
+无论选择哪一种方式，都必须保持 Shadowrocket 已连接、模块已启用、HTTPS 解密和证书信任有效。
+
+## 方式一：在网页中直接改位置（推荐）
+
+### 第一步：打开网页
+
+使用 iPhone Safari 打开 <https://ding.199060.xyz>。不要使用微信、QQ、抖音等 App 的内置浏览器，以免快捷跳转或本地收藏失效。
+
+### 第二步：选择地点
+
+可以使用任意一种方法：
+
+1. 直接点击地图上的目标位置；
+2. 在搜索框输入地点名称，从搜索结果中选择；
+3. 点击页面提供的公共常用地点；
+4. 在经纬度输入区域粘贴坐标。
+
+地图上的标记就是准备保存的位置。保存前检查地点和经纬度是否符合预期。
+
+### 第三步：储存到设备
+
+点击“储存到设备”。网页会请求 WLOC 保存接口，Shadowrocket 模块截获该请求并保存经度、纬度和精度。看到成功提示后，坐标已经写入模块。
+
+### 第四步：刷新并验证
+
+1. 彻底退出需要验证位置的 App；
+2. 等待几秒后重新打开；
+3. 可先用 Apple 地图查看蓝点；
+4. 如果仍显示旧位置，打开系统定位服务关闭再开启；
+5. iOS 26 及更高版本仍未刷新时，重启设备。
+
+## 方式二：在 Apple 地图或高德地图选点
+
+这种方式可以使用手机地图 App 找地点，但地图 App 只负责产生地点链接，最后仍需要回到“老王打卡”解析并保存。
+
+### Apple 地图操作方法
+
+1. 打开 Apple 地图并搜索目标地点；
+2. 点击正确的地点卡片，不要只停留在地图视口；
+3. 点击“分享”；
+4. 选择“拷贝”，复制 Apple 地图链接；
+5. 返回 Safari 中的老王打卡网页；
+6. 找到“粘贴地图链接”；
+7. 粘贴链接并点击“解析”；
+8. 网页识别地点名称和坐标后移动地图标记；
+9. 检查位置无误，点击“储存到设备”；
+10. 退出并重新打开需要验证位置的 App。
+
+Apple 地图分享链接通常包含 WGS-84 坐标，网页会按 Apple 地图来源处理，不需要手工换算。
+
+### 高德地图操作方法
+
+1. 打开高德地图并搜索目标地点；
+2. 点击目标地点，打开完整地点详情；
+3. 点击“分享”；
+4. 选择“复制链接”；
+5. 返回 Safari 中的老王打卡网页；
+6. 在“粘贴地图链接”区域粘贴链接；
+7. 点击“解析”；
+8. 短链接会由服务器跟随跳转并读取地点坐标；
+9. 网页自动把高德 GCJ-02 坐标换算为 WGS-84；
+10. 检查地图标记后点击“储存到设备”。
+
+不要把高德页面显示的数字手工当成 WGS-84 使用。直接粘贴高德分享链接，交给项目完成坐标识别和换算。
+
+### 地图链接解析失败怎么办
+
+- 确认复制的是具体地点的分享链接，而不是截图、纯地点名称或导航路线；
+- 重新打开地点详情后再复制一次；
+- 高德短链接需要服务器联网跟随跳转；
+- 仍然失败时，在网页搜索框直接搜索地点，或在地图上手动点击。
+
+## 一键快捷指令详细用法
+
+项目提供两条快捷指令：一条切换到默认收藏，一条恢复真实定位。它们不是地图搜索工具，首次使用仍需在网页中准备收藏地点。
+
+### 快捷指令一：老王打卡一键切换
+
+安装地址：<https://www.icloud.com/shortcuts/6b091740311d492683c882200658bd80>
+
+#### 首次安装
+
+1. 用 iPhone Safari 打开安装地址；
+2. 点击“获取快捷指令”或“添加快捷指令”；
+3. 打开老王打卡网页，选择目标地点；
+4. 点击“收藏位置”，输入容易识别的名称；
+5. 在收藏列表中点击该地点右侧的“设默认”；
+6. 确认地点名称前出现 `★`。
+
+#### 日常使用
+
+1. 确认 Shadowrocket 已连接且模块已启用；
+2. 在桌面、小组件或快捷指令 App 中点击“老王打卡一键切换”；
+3. 快捷指令打开 `https://ding.199060.xyz/?quick=default`；
+4. 网页读取这台 iPhone 的 Safari 为 `ding.199060.xyz` 保存的 `★` 默认收藏；
+5. 网页自动把默认收藏的经纬度写入 WLOC 设置；
+6. 出现“已一键切换”提示后，重新打开需要验证位置的 App；
+7. 系统仍使用旧缓存时，关闭再打开定位服务或重启设备。
+
+#### 更换默认地点
+
+不需要重新安装快捷指令。打开老王打卡网页，在另一个收藏旁点击“设默认”；下次运行快捷指令时就会切换到新的默认地点。
+
+#### 重要说明
+
+- 默认收藏保存在当前 Safari 的网站数据中；
+- 它不是保存在网站账号、后台或 Cloudflare KV 中；
+- 快捷指令不能读取另一台手机或其他浏览器中的收藏；
+- 清除 Safari 网站数据后，需要重新收藏并设默认；
+- 在另一台 iPhone 上使用时，需要在那台设备重新设置默认收藏；
+- 无痕浏览和普通浏览的数据可能不相通；
+- 快捷指令会短暂打开网页，这是读取浏览器收藏并执行写入所必需的步骤。
+
+### 快捷指令二：一键恢复真实定位
+
+安装地址：<https://www.icloud.com/shortcuts/c51df1683d2b4954b2732addef94cae8>
+
+#### 首次安装
+
+1. 用 iPhone Safari 打开安装地址；
+2. 点击“获取快捷指令”或“添加快捷指令”；
+3. 首次运行遇到网络访问提示时选择允许。
+
+#### 日常使用
+
+1. 点击“一键恢复真实定位”；
+2. 快捷指令请求 `wloc-settings/save?action=clear`；
+3. Shadowrocket 模块清除持久化保存的模拟坐标；
+4. 快捷指令显示恢复通知；
+5. 等待约 1 秒后自动打开 iOS 定位服务设置；
+6. 将定位服务关闭再开启，以促使系统刷新；
+7. 彻底退出地图或目标 App 后重新打开；
+8. 仍显示旧位置时重启设备。
+
+“恢复真实定位”是清除项目保存的坐标，不会删除收藏和历史。收藏与历史仍保留在 Safari 中，之后可以再次运行一键切换。
+
+## 最短操作清单
+
+### 第一次安装
+
+1. Safari 打开 `ding.199060.xyz`；
+2. 安装并启用小火箭模块；
+3. 开启 HTTPS 解密，安装并信任自己的证书；
+4. 在网页选择地点；
+5. 点击“储存到设备”；
+6. 退出并重新打开地图验证。
+
+### 网页换一个新地点
+
+1. Safari 打开老王打卡；
+2. 搜索或点击地图；
+3. 点击“储存到设备”；
+4. 重新打开目标 App。
+
+### 从 Apple 地图或高德地图选地点
+
+1. 在地图 App 打开具体地点详情；
+2. 分享并复制链接；
+3. 回老王打卡粘贴链接；
+4. 点击“解析”；
+5. 点击“储存到设备”。
+
+### 一键切换固定地点
+
+1. 提前在 Safari 网页收藏并设为 `★` 默认；
+2. 点击“老王打卡一键切换”；
+3. 等待成功提示后重新打开目标 App。
+
+### 恢复真实定位
+
+1. 点击“一键恢复真实定位”；
+2. 在自动打开的定位设置中关闭再开启定位服务；
+3. 彻底退出并重新打开目标 App；
+4. 仍未恢复时重启设备。
+
+## 管理后台
+
+后台地址：
+
+```text
+https://你的域名/admin
+```
+
+管理员密码由 Cloudflare Secret `ADMIN_PASSWORD` 提供，不写入源码。后台设置保存在绑定名为 `APP_DATA` 的 KV 中。
+
+可配置品牌名称、公开域名、首页公告、快捷指令地址和公共常用地点。修改公开域名后，应同时检查首页模块安装地址和 `/modules/wloc.module` 内容。
+
+## 部署到 Cloudflare Workers
+
+### 环境准备
+
+- Node.js 20 或更高版本
+- npm、pnpm 或其他兼容包管理器
+- Cloudflare 账号
+- Wrangler CLI
+
+### 1. 获取代码
 
 ```bash
 git clone https://github.com/tony-wang1990/ding.git
 cd ding/worker
 npm install
+```
+
+### 2. 登录并创建 KV
+
+```bash
 npx wrangler login
 npx wrangler kv namespace create APP_DATA
 cp wrangler.example.jsonc wrangler.jsonc
-# 把输出的 KV id 写入 wrangler.jsonc
+```
+
+将 `wrangler.jsonc` 中的 `REPLACE_WITH_YOUR_KV_NAMESPACE_ID` 替换为命令返回的 KV ID。绑定名称必须保持为 `APP_DATA`。
+
+### 3. 设置 Secret
+
+```bash
 npx wrangler secret put ADMIN_PASSWORD
 npx wrangler secret put SESSION_SECRET
+```
+
+- `ADMIN_PASSWORD`：后台登录密码
+- `SESSION_SECRET`：至少 32 个随机字符，用于签名管理员会话
+
+不要把密码、API Token、`.dev.vars` 或真实 Secret 提交到 Git。
+
+### 4. 测试并部署
+
+```bash
 npm test
 npm run deploy
 ```
 
-完整的 Cloudflare 控制台图文步骤、自定义域名绑定、iPhone 安装、证书信任及故障排查均在本页下方的 **[完整图文教程](#完整图文教程)**。
+部署后检查首页、`/admin`、`/modules/wloc.module` 和后台保存功能。
 
-## 他人能否部署
+### 5. 绑定自定义域名
 
-可以。部署者需要自己的 Cloudflare 账号，并自行创建 KV、设置 `ADMIN_PASSWORD` 和随机的 `SESSION_SECRET`。不要复制本项目线上实例的密钥，也不要把 `.dev.vars`、API Token 或密码提交到 Git。
-
-本项目延续上游的 **GNU AGPL-3.0** 许可证。允许使用、修改和再发布；如果修改版通过网络向用户提供服务，需要按许可证向这些用户提供对应源代码，并保留许可证及原作者声明。详见 [LICENSE](LICENSE) 和 [SECURITY.md](SECURITY.md)。
+在 Cloudflare 控制台进入 Worker 的“设置 → 域和路由”，添加自定义域名。域名生效后进入 `/admin`，把“公开域名”改为对应主机名。
 
 ## 本地开发
 
@@ -57,262 +392,88 @@ npm test
 npm run dev
 ```
 
-目录说明：
-
-- `worker/src/index.js`：路由与 API
-- `worker/src/page.js`：中文选点页面
-- `worker/src/admin-page.js`：管理后台
-- `worker/src/auth.js`：管理员会话认证
-- `worker/src/config.js`：KV 配置模型
-- `worker/src/parse.js`：地图链接解析与坐标换算
-- `modules/`：各代理客户端模块
-- `docs/`：图文教程与配图
-
-## 上游与致谢
-
-本项目是在 [Yu9191/wloc](https://github.com/Yu9191/wloc) 基础上的二次开发，保留原 Git 历史和 AGPL-3.0 许可证。感谢上游作者及贡献者。
-
----
-
-## 完整图文教程
-
-
-本教程按“普通用户使用 → 管理员设置 → 自己部署”排列。每张示意图里的红色箭头表示需要点击或填写的位置；不同 iOS、Shadowrocket 和 Cloudflare 版本的文字可能略有不同，以当前界面为准。
-
-## 开始前先确认
-
-- iPhone/iPad 已安装 Shadowrocket（小火箭）或其他兼容代理工具，并拥有可正常使用的代理配置。
-- Safari 可以访问你的选点站点；使用公共版本时是 `https://ding.199060.xyz`。
-- 证书解密只应在自己的设备、自己的代理配置和获得授权的网络中使用。
-- iOS 26 及更高版本可能长期缓存位置；换点后若未变化，通常需要重启设备。
-- 本工具修改 Apple WLOC 网络定位结果，并非硬件 GPS；依赖纯 GPS、蓝牙信标或风控校验的 App 可能不采用它。
-
----
-
-## 第一部分：普通用户安装与使用
-
-### 第 1 步：打开选点站点
-
-用 Safari 打开 `https://ding.199060.xyz`。确认地址栏是 HTTPS、页面标题显示“老王打卡”，不要在来路不明的仿冒页面安装模块。
-
-![第 1 步：打开站点](https://cdn.jsdelivr.net/gh/tony-wang1990/ding@main/docs/images/01-open-site.png)
-
-### 第 2 步：安装 Shadowrocket 模块
-
-在首页点击“安装小火箭模块”。系统会跳转到 Shadowrocket；如果没有跳转，长按“复制模块地址”，复制 `https://ding.199060.xyz/modules/wloc.module`，再到 Shadowrocket 的模块页面手动添加。
-
-![第 2 步：安装模块](https://cdn.jsdelivr.net/gh/tony-wang1990/ding@main/docs/images/02-install-module.png)
-
-### 第 3 步：确认导入
-
-在 Shadowrocket 的导入提示中核对模块名称和来源域名，点击“安装”或“添加”。不要导入来源不明、内容不可查看的模块。
-
-![第 3 步：确认导入](https://cdn.jsdelivr.net/gh/tony-wang1990/ding@main/docs/images/03-confirm-import.png)
-
-### 第 4 步：启用模块
-
-进入 Shadowrocket → 配置 → 模块，找到刚导入的模块并打开右侧开关。更新站点模块后，可在这里重新下载或更新。
-
-![第 4 步：启用模块](https://cdn.jsdelivr.net/gh/tony-wang1990/ding@main/docs/images/04-enable-module.png)
-
-### 第 5 步：打开 HTTPS 解密
-
-进入当前配置的 HTTPS 解密/MITM 设置并打开开关。模块需要读取并修改对应网络定位响应；没有开启时，即使页面保存成功也不会生效。
-
-![第 5 步：打开 HTTPS 解密](https://cdn.jsdelivr.net/gh/tony-wang1990/ding@main/docs/images/05-open-mitm.png)
-
-### 第 6 步：生成并安装证书
-
-在证书设置中选择“生成新的 CA 证书”，再点击“安装证书”。如果已有自己生成且仍有效的证书，可以继续使用，不必反复生成。
-
-![第 6 步：生成证书](https://cdn.jsdelivr.net/gh/tony-wang1990/ding@main/docs/images/06-create-cert.png)
-
-### 第 7 步：安装描述文件
-
-系统提示已下载描述文件后，打开 iOS“设置”→“通用”→“VPN 与设备管理”，选择刚下载的描述文件，点击右上角“安装”，按系统要求输入锁屏密码。
-
-![第 7 步：安装描述文件](https://cdn.jsdelivr.net/gh/tony-wang1990/ding@main/docs/images/07-install-profile.png)
-
-### 第 8 步：信任根证书
-
-打开“设置”→“通用”→“关于本机”→“证书信任设置”，打开刚才安装证书的完全信任开关，并确认系统警告。仅信任你本人在 Shadowrocket 中生成的证书。
-
-![第 8 步：信任证书](https://cdn.jsdelivr.net/gh/tony-wang1990/ding@main/docs/images/08-trust-cert.png)
-
-### 第 9 步：选择目标地点
-
-返回选点站点，可通过地图点击、搜索框联想、常用地点按钮，或粘贴 Apple/高德/Google/百度地图链接选择位置。地图标记和经纬度显示正确后再继续。
-
-![第 9 步：选择地点](https://cdn.jsdelivr.net/gh/tony-wang1990/ding@main/docs/images/09-select-place.png)
-
-### 第 10 步：储存到设备
-
-确保 Shadowrocket 已连接且状态栏出现 VPN 图标，然后点击“储存到设备”。出现成功提示代表坐标已写入代理工具的持久化存储，不代表系统缓存已经刷新。
-
-![第 10 步：储存位置](https://cdn.jsdelivr.net/gh/tony-wang1990/ding@main/docs/images/10-save-location.png)
-
-### 第 11 步：刷新系统位置缓存
-
-iOS 15–18 通常等待系统下一次请求即可；iOS 26 及更高版本建议先保存位置，再重启设备。重启后先连接代理、确认模块和 HTTPS 解密已启用，再打开定位服务和地图。
-
-![第 11 步：刷新缓存](https://cdn.jsdelivr.net/gh/tony-wang1990/ding@main/docs/images/11-refresh-location.png)
-
-### 第 12 步：在地图中验证
-
-打开 Apple 地图观察蓝点。首次请求可能需要几十秒。不要只用一个第三方 App 判断，因为有的 App 使用 GPS、缓存或自己的风控结果。
-
-![第 12 步：验证位置](https://cdn.jsdelivr.net/gh/tony-wang1990/ding@main/docs/images/12-verify-map.png)
-
-### 第 13 步：恢复真实定位
-
-优先关闭或删除模块，然后重启设备清除缓存。也可以使用页面的“清除/恢复”功能清空保存坐标；若模块参数中手工写了固定坐标，必须一并恢复默认值。
-
-![第 13 步：恢复位置](https://cdn.jsdelivr.net/gh/tony-wang1990/ding@main/docs/images/13-restore-location.png)
-
-### 第 14 步：使用收藏位置
-
-选好坐标后点击“收藏位置”，输入名称保存。收藏保存在当前浏览器的 `localStorage`，换浏览器、无痕模式或清理网站数据后不会同步，但不影响代理工具中已经生效的坐标。
-
-![第 14 步：收藏位置](https://cdn.jsdelivr.net/gh/tony-wang1990/ding@main/docs/images/14-use-favorites.png)
-
-### 第 15 步：查看定位历史
-
-页面会把最近选择记录保存在当前浏览器。点击历史条目可快速回到该坐标；清理浏览器数据会删除历史。请勿在共用设备上保留敏感地点。
-
-![第 15 步：定位历史](https://cdn.jsdelivr.net/gh/tony-wang1990/ding@main/docs/images/15-use-history.png)
-
----
-
-## 第二部分：管理员设置
-
-### 第 16 步：登录管理后台
-
-打开“你的域名 + `/admin`”，例如 `https://ding.199060.xyz/admin`，输入部署时通过 Cloudflare Secret 设置的管理员密码。连续失败时先确认 Secret 名称必须是 `ADMIN_PASSWORD`，而不是把密码写进源码。
-
-![第 16 步：管理员登录](https://cdn.jsdelivr.net/gh/tony-wang1990/ding@main/docs/images/16-admin-login.png)
-
-### 第 17 步：修改站点设置
-
-后台可以修改品牌名称、公开域名、公告、两条快捷指令链接和公共常用地点。域名只填主机名，不加路径；快捷指令必须使用 HTTPS。保存后刷新首页检查结果。
-
-![第 17 步：保存后台设置](https://cdn.jsdelivr.net/gh/tony-wang1990/ding@main/docs/images/17-admin-settings.png)
-
-每次修改后检查：首页品牌和公告、模块链接域名、`/modules/wloc.module`、常用地点经纬度，以及退出后台后无法再修改配置。
-
----
-
-## 第三部分：从 GitHub 部署到自己的 Cloudflare
-
-### 第 18 步：Fork 或克隆代码并创建 KV
-
-打开 `https://github.com/tony-wang1990/ding`，在线保存副本可点 Fork；本地部署可执行：
-
-```bash
-git clone https://github.com/tony-wang1990/ding.git
-cd ding/worker
-npm install
-npx wrangler login
-npx wrangler kv namespace create APP_DATA
+`.dev.vars` 示例：
+
+```text
+ADMIN_PASSWORD=your-admin-password
+SESSION_SECRET=replace-with-a-long-random-string
 ```
 
-复制命令返回的 namespace ID。把 `wrangler.example.jsonc` 复制为 `wrangler.jsonc`，将 `REPLACE_WITH_YOUR_KV_NAMESPACE_ID` 替换为自己的 ID。绑定名称 `APP_DATA` 不要改，否则后台无法保存设置。
+## 项目结构
 
-![第 18 步：创建 KV](https://cdn.jsdelivr.net/gh/tony-wang1990/ding@main/docs/images/18-create-kv.png)
-
-### 第 19 步：设置两个 Secret
-
-在 `worker` 目录执行：
-
-```bash
-npx wrangler secret put ADMIN_PASSWORD
-npx wrangler secret put SESSION_SECRET
+```text
+.
+├── modules/                  # 代理模块相关文件
+├── docs/                     # 文档图片
+├── worker/
+│   ├── src/
+│   │   ├── index.js          # Worker 路由与 API
+│   │   ├── page.js           # 中文选点页面
+│   │   ├── quick-page.js     # 快捷指令自动执行页面
+│   │   ├── admin-page.js     # 管理后台页面
+│   │   ├── auth.js           # 管理员认证与会话
+│   │   ├── config.js         # 站点配置与 KV 读写
+│   │   ├── parse.js          # 地图链接解析与坐标换算
+│   │   └── gcj-browser.js    # 浏览器端坐标换算
+│   ├── test/                 # 自动测试
+│   ├── package.json
+│   ├── wrangler.example.jsonc
+│   └── wrangler.pages.jsonc
+├── LICENSE
+└── README.md
 ```
 
-第一条输入自己的强管理员密码；第二条输入至少 32 个随机字符。终端输入 Secret 时不显示字符是正常现象。不要把真实值写进 `wrangler.jsonc`、README、截图或 GitHub Actions 日志。
+## 主要路由
 
-![第 19 步：设置 Secret](https://cdn.jsdelivr.net/gh/tony-wang1990/ding@main/docs/images/19-set-secrets.png)
+| 路径 | 作用 |
+| --- | --- |
+| `/` | 地图选点首页 |
+| `/admin` | 管理后台 |
+| `/quick` | 快捷指令自动执行页面 |
+| `/modules/wloc.module` | 动态生成 Shadowrocket 模块 |
+| `/api/search` | 地点搜索接口 |
+| `/api/parse` | 地图链接与坐标解析接口 |
+| `/api/config` | 公开站点配置 |
+| `/api/admin/*` | 管理员登录与配置接口 |
 
-### 第 20 步：测试并部署 Worker
+## 数据存储
 
-```bash
-npm test
-npm run deploy
-```
+| 数据 | 存储位置 |
+| --- | --- |
+| 收藏地点、默认收藏、定位历史 | 当前设备、当前浏览器、当前域名的 `localStorage` |
+| 当前生效坐标 | 代理模块持久化存储 |
+| 品牌、公告、公共地点 | Cloudflare KV `APP_DATA` |
+| 管理员密码 | Cloudflare Secret |
 
-测试全部通过后，Wrangler 会输出 `*.workers.dev` 地址。打开它检查首页、`/admin` 和 `/modules/wloc.module`。若部署报 KV 不存在，通常是写入了别人的 namespace ID，或登录了错误的 Cloudflare 账号。
+收藏和历史不会自动跨设备、浏览器或域名同步。清除浏览器网站数据会删除本地记录，但不会自动清除模块中已经保存的坐标。后台配置的“公共常用地点”属于站点公共内容，与个人收藏不是同一类数据。
 
-![第 20 步：部署 Worker](https://cdn.jsdelivr.net/gh/tony-wang1990/ding@main/docs/images/20-deploy-worker.png)
+## 常见问题
 
-### 第 21 步：绑定自定义域名
+### 页面提示保存成功，但位置没有变化
 
-域名必须先把 DNS 托管到当前 Cloudflare 账号。进入 Cloudflare 控制台 → Workers & Pages → 你的 Worker → Settings → Domains & Routes → Add → Custom domain，填写子域名并确认。等待证书变为 Active 后，再到 `/admin` 把“公开域名”改成新域名。
-
-![第 21 步：绑定域名](https://cdn.jsdelivr.net/gh/tony-wang1990/ding@main/docs/images/21-bind-domain.png)
-
-完成后逐项检查：
-
-- `https://你的域名/` 返回 200 且证书有效；
-- `/admin` 可以登录，`/modules/wloc.module` 可以下载；
-- 首页模块按钮中的域名正确；
-- 后台保存后 KV 中出现 `site_config`；
-- GitHub 仓库里搜不到真实密码、API Token 和 `.dev.vars`。
-
----
-
-## 傻瓜式一键快捷指令
-
-### 第一次使用：安装两条快捷指令
-
-1. 用 iPhone Safari 打开站点首页。
-2. 点“安装一键切换快捷指令”，在 Apple 快捷指令页面点“获取快捷指令”并完成添加。
-3. 返回首页，点“一键恢复真实定位”，同样完成添加。
-4. 首次运行时，按系统提示允许快捷指令打开网页和访问网络。
-
-一键切换安装地址：<https://www.icloud.com/shortcuts/6b091740311d492683c882200658bd80>
-
-恢复真实定位安装地址：<https://www.icloud.com/shortcuts/c51df1683d2b4954b2732addef94cae8>
-
-### 设置默认打卡地点
-
-1. 在首页搜索或在地图上选好坐标，保存为收藏。
-2. 在“我的收藏”中点该地点旁边的“设默认”；带 `★` 的地点就是快捷指令将使用的地点。
-3. 以后只需点 iPhone 上的“老王打卡一键切换”，无需复制链接、共享地图或再次选择坐标。
-
-### 一键恢复真实定位
-
-直接点“WLOC恢复定位”，快捷指令会清除保存的模拟坐标并打开系统定位设置。若部分 App 仍显示旧地点，请彻底退出后重开；iOS 26+ 因系统缓存可能需要重启手机。
-
-> 默认收藏保存在当前 Safari 浏览器中。清除 Safari 网站数据、使用另一台手机或更换浏览器后，需要重新收藏并“设默认”。
-
----
-
-## 常见问题排查
-
-### 页面显示保存成功，但地图不变化
-
-依次检查 VPN、模块、HTTPS 解密、证书信任和目标域名是否被代理；iOS 26+ 保存后重启。仍无效时查看 Shadowrocket 脚本日志是否出现 WLOC 请求。
+检查 Shadowrocket 是否已连接、模块是否启用、HTTPS 解密是否开启、证书是否受信任。彻底退出地图应用再打开；系统存在定位缓存时重启设备。
 
 ### 模块安装按钮没有反应
 
-用 iPhone Safari 打开，不要用部分 App 的内置浏览器。也可以复制 `/modules/wloc.module` 完整链接，到 Shadowrocket 模块页手动添加。
+使用 iPhone Safari 打开站点，或复制 `/modules/wloc.module` 完整地址，在 Shadowrocket 模块页面手动添加。
 
-### 后台密码总是错误
+### 一键切换提示失败
 
-Secret 名称必须精确为 `ADMIN_PASSWORD`；`SESSION_SECRET` 也必须存在，否则登录后无法保持会话。修改后重新部署或等待配置生效。
+确认已收藏地点并设置默认项，同时检查代理、模块和 HTTPS 解密。默认收藏必须存在于快捷指令打开的 Safari 浏览器中。
 
-### 后台提示 APP_DATA 未绑定
+### 恢复后仍显示旧位置
 
-检查 `wrangler.jsonc` 的 KV binding 是否为 `APP_DATA`，ID 是否属于当前账号，修改后重新部署。
+确认恢复快捷指令执行成功，然后彻底退出相关应用。必要时关闭模块或代理并重启设备，以清除系统和应用缓存。
 
-### 别人是否可以使用我的部署
+### 后台无法登录
 
-可以，只要站点公开、模块链接可访问且 Cloudflare 配额足够。收藏和历史存在每位用户自己的浏览器，公共站点配置存在部署者的 KV。不要共享管理员密码。
+确认 Cloudflare 中存在 `ADMIN_PASSWORD` 和 `SESSION_SECRET` 两个 Secret。修改 Secret 后重新部署 Worker。
 
-### 许可证需要注意什么
+### 后台提示 `APP_DATA` 未绑定
 
-代码基于 [Yu9191/wloc](https://github.com/Yu9191/wloc)，使用 GNU AGPL-3.0。可以部署、修改、分享；对外提供修改版网络服务时，应向使用者提供对应源代码并保留许可证和原作者声明。许可证原文见 [LICENSE](../LICENSE)。
+确认 `wrangler.jsonc` 的 KV binding 名称为 `APP_DATA`，namespace ID 属于当前 Cloudflare 账号。
 
-## 更新已经部署的版本
+## 更新部署
 
 ```bash
 git pull
@@ -322,4 +483,22 @@ npm test
 npm run deploy
 ```
 
-更新不会主动删除 KV 中的 `site_config`。如自行修改过代码，应先在独立分支合并和测试，不要直接覆盖。
+重新部署不会主动删除 KV 中保存的站点配置。
+
+## 安全说明
+
+- 不要公开管理员密码、Cloudflare API Token 或会话 Secret。
+- 不要把 `.dev.vars` 或真实密钥提交到公开仓库。
+- HTTPS 解密证书只应在自己的设备上生成和信任。
+- 公共设备不应保存涉及隐私的收藏地点与定位历史。
+- 使用本项目时应遵守所在地法律、服务条款和设备管理规定。
+
+安全问题请参阅 [SECURITY.md](SECURITY.md)。
+
+## 上游项目
+
+本项目基于 [Yu9191/wloc](https://github.com/Yu9191/wloc) 进行二次开发，保留原项目许可证与相关声明。
+
+## 许可证
+
+本项目采用 [GNU Affero General Public License v3.0](LICENSE)。使用、修改和分发本项目时，请遵守许可证要求并保留原作者及许可证声明。
