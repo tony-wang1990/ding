@@ -2,8 +2,8 @@ export const DEFAULT_CONFIG = {
   brandName: "老王打卡",
   domain: "ding.199060.xyz",
   announcement: "请选择目标地点并储存到设备。首次使用请先完成模块和证书安装。",
-  shortcutSetUrl: "",
-  shortcutClearUrl: "",
+  shortcutSetUrl: "https://www.icloud.com/shortcuts/6b091740311d492683c882200658bd80",
+  shortcutClearUrl: "https://www.icloud.com/shortcuts/c51df1683d2b4954b2732addef94cae8",
   publicAccess: true,
   commonPlaces: [
     { name: "北京天安门", lat: 39.908823, lon: 116.39747 },

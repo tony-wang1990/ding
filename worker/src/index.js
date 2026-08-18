@@ -1,6 +1,7 @@
 import { Hono } from "hono/tiny";
 import { getPageHtml } from "./page.js";
 import { getAdminHtml } from "./admin-page.js";
+import { getQuickPageHtml } from "./quick-page.js";
 import { loadConfig, saveConfig } from "./config.js";
 import { clearSessionCookie, createSession, isAdmin, sessionCookie } from "./auth.js";
 import { parseCoords, gcj02ToWgs84, toWgs84, round6, inRange } from "./parse.js";
@@ -12,6 +13,7 @@ app.get("/", async (c) => {
 });
 
 app.get("/admin", (c) => c.html(getAdminHtml()));
+app.get("/quick", (c) => c.html(getQuickPageHtml()));
 
 app.get("/api/config", async (c) => {
   const config = await loadConfig(c.env);

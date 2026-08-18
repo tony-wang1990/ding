@@ -63,6 +63,8 @@ body { font-family:-apple-system,system-ui,"PingFang SC","SF Pro","Helvetica Neu
 .fav-item .fav-active { font-size:10px; color:var(--green); font-weight:600; }
 .fav-item .fav-del { flex:none; width:28px; height:28px; border:none; border-radius:50%; background:transparent; color:var(--red); font-size:16px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background .15s; }
 .fav-item .fav-del:hover { background:rgba(255,59,48,.1); }
+.fav-actions { display:flex; align-items:center; gap:5px; flex:none; }
+.fav-switch { border:0; border-radius:9px; padding:8px 10px; background:var(--blue); color:#fff; font-size:12px; font-weight:650; cursor:pointer; white-space:nowrap; }
 .fav-empty { text-align:center; color:var(--gray); font-size:13px; padding:16px 0; }
 .fav-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
 .fav-header h3 { margin-bottom:0; }
@@ -136,10 +138,10 @@ body { font-family:-apple-system,system-ui,"PingFang SC","SF Pro","Helvetica Neu
     <div class="install-grid">
       <a class="btn btn-primary" style="text-decoration:none;text-align:center" href="shadowrocket://install?module=${encodeURIComponent(`https://${config.domain || "ding.199060.xyz"}/modules/wloc.module`)}">安装小火箭模块</a>
       <a class="btn btn-secondary" style="text-decoration:none;text-align:center" href="/modules/wloc.module">复制模块地址</a>
-      <a class="btn btn-secondary" id="setShortcut" style="text-decoration:none;text-align:center" href="${escapeHtml(config.shortcutSetUrl || "#")}">设置定位快捷指令</a>
-      <a class="btn btn-secondary" id="clearShortcut" style="text-decoration:none;text-align:center" href="${escapeHtml(config.shortcutClearUrl || "#")}">恢复定位快捷指令</a>
+      <a class="btn btn-secondary" id="setShortcut" style="text-decoration:none;text-align:center" href="${escapeHtml(config.shortcutSetUrl || "https://www.icloud.com/shortcuts/6b091740311d492683c882200658bd80")}">安装一键切换快捷指令</a>
+      <a class="btn btn-danger" id="clearShortcut" style="text-decoration:none;text-align:center" href="${escapeHtml(config.shortcutClearUrl || "https://www.icloud.com/shortcuts/c51df1683d2b4954b2732addef94cae8")}">一键恢复真实定位</a>
     </div>
-    <div style="font-size:11px;color:var(--gray);margin-top:9px">快捷指令链接配置完成后将自动开放；目前可直接使用网页选点。</div>
+    <div style="font-size:11px;color:var(--gray);margin-top:9px">收藏地点可直接点“一键切换”；恢复按钮会立即清除保存坐标。</div>
   </div>
   <div class="card">
     <div class="fav-header">
@@ -204,6 +206,7 @@ if (typeof L === 'undefined') {
 ${GCJ_BROWSER_JS}
 const SAVE_API = 'https://gs-loc.apple.com/wloc-settings/save';
 const FAV_KEY = 'wloc_favorites';
+const DEFAULT_FAV_KEY = 'wloc_default_favorite';
 const HISTORY_KEY = 'laowang_location_history';
 // lat/lon 恒为 WGS84 —— 这是写进设备、也是 wloc 唯一认的坐标系。
 // 底图可能是 GCJ-02 图源, 屏幕上的经纬度与它并不相等, 换算集中在 toDisplay/
@@ -296,14 +299,17 @@ function renderFavs() {
     return;
   }
   el.innerHTML = favs.map((f, i) => {
+    const isDefault = localStorage.getItem(DEFAULT_FAV_KEY) === String(i) || (!localStorage.getItem(DEFAULT_FAV_KEY) && i === 0);
     const isActive = activeLon !== null && Math.abs(f.lon - activeLon) < 0.000001 && Math.abs(f.lat - activeLat) < 0.000001;
     return '<div class="fav-item" onclick="loadFav(' + i + ')">' +
       '<div class="fav-info">' +
-        '<div class="fav-name">' + escHtml(f.name) + '<\\/div>' +
+        '<div class="fav-name">' + (isDefault ? '★ ' : '') + escHtml(f.name) + '<\\/div>' +
         '<div class="fav-coords">' + f.lon.toFixed(6) + ', ' + f.lat.toFixed(6) + '<\\/div>' +
         (isActive ? '<div class="fav-active">\\u2713 当前生效<\\/div>' : '') +
       '<\\/div>' +
-      '<button class="fav-del" onclick="event.stopPropagation();delFav(' + i + ')" title="删除">\\u00d7<\\/button>' +
+      '<div class="fav-actions"><button class="btn btn-sm btn-secondary" onclick="event.stopPropagation();setDefaultFav(' + i + ')">' + (isDefault ? '默认' : '设默认') + '<\\/button>' +
+      '<button class="fav-switch" onclick="event.stopPropagation();quickSwitchFav(' + i + ')">一键切换<\\/button>' +
+      '<button class="fav-del" onclick="event.stopPropagation();delFav(' + i + ')" title="删除">\\u00d7<\\/button><\\/div>' +
     '<\\/div>';
   }).join('');
 }
@@ -340,6 +346,36 @@ function loadFav(i) {
   if (!favs[i]) return;
   moveTo(favs[i].lat, favs[i].lon, 15);
   toast(favs[i].name + ' (' + favs[i].lon.toFixed(4) + ', ' + favs[i].lat.toFixed(4) + ')');
+}
+
+async function quickSwitchFav(i) {
+  const f = getFavs()[i];
+  if (!f) return;
+  try {
+    toast('正在切换到 ' + f.name + '…');
+    const r = await fetch(SAVE_API + '?lon=' + f.lon + '&lat=' + f.lat + '&acc=25', { method:'GET', mode:'cors', cache:'no-store' });
+    const d = await r.json();
+    if (!d.success) throw new Error(d.error || '写入失败');
+    activeLon = f.lon; activeLat = f.lat;
+    moveTo(f.lat, f.lon, 16);
+    document.getElementById('activeValue').textContent = '经度 ' + f.lon.toFixed(6) + '  纬度 ' + f.lat.toFixed(6) + '  精度 25m';
+    renderFavs(); addHistory(f.name);
+    toast('✓ 已一键切换到 ' + f.name, 3500);
+  } catch(e) { toast('切换失败，请检查 VPN、模块和 HTTPS 解密', 4000); }
+}
+
+function setDefaultFav(i) {
+  if (!getFavs()[i]) return;
+  localStorage.setItem(DEFAULT_FAV_KEY, String(i));
+  renderFavs(); toast('已设为快捷指令默认地点');
+}
+
+function runDefaultFavorite() {
+  const favs = getFavs();
+  if (!favs.length) return toast('请先收藏一个地点', 4000);
+  let i = parseInt(localStorage.getItem(DEFAULT_FAV_KEY) || '0', 10);
+  if (!favs[i]) i = 0;
+  quickSwitchFav(i);
 }
 
 function delFav(i) {
@@ -413,8 +449,8 @@ function queryActive() {
     });
 }
 
-function clearActive() {
-  if (!confirm('确定清除设备上已保存的坐标？清除后将使用模块默认参数或停止修改定位。')) return;
+function clearActive(skipConfirm) {
+  if (!skipConfirm && !confirm('确定清除设备上已保存的坐标？清除后将使用模块默认参数或停止修改定位。')) return;
   fetch(SAVE_API + '?action=clear', { method:'GET', mode:'cors', cache:'no-store' })
     .then(r => r.json())
     .then(d => {
@@ -579,8 +615,9 @@ document.getElementById('favNameInput').addEventListener('keydown', e => { if(e.
 renderFavs();
 renderCommonPlaces();
 renderHistory();
-for (const id of ['setShortcut','clearShortcut']) document.getElementById(id).addEventListener('click', e => { if(e.currentTarget.getAttribute('href')==='#'){e.preventDefault();toast('专属快捷指令尚未发布');} });
+document.getElementById('setShortcut').addEventListener('click', e => { if(e.currentTarget.getAttribute('href')==='#'){e.preventDefault();toast('一键切换无需安装：请直接点击收藏地点右侧按钮');} });
 queryActive();
+if (new URLSearchParams(location.search).get('quick') === 'default') setTimeout(runDefaultFavorite, 500);
 <\/script>
 </body>
 </html>`;

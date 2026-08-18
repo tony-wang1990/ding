@@ -1,0 +1,10 @@
+export function getQuickPageHtml() {
+  return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>老王打卡 · 一键执行</title><style>
+  *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f7efe5;color:#3d2b20;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;padding:24px}.card{width:min(420px,100%);background:#fff;border-radius:24px;padding:28px;box-shadow:0 18px 50px rgba(69,42,23,.12);text-align:center}.icon{font-size:48px}.title{font-size:24px;font-weight:750;margin:12px 0 8px}.msg{color:#786457;line-height:1.7}.ok{color:#21894d}.bad{color:#c53a32}.btn{display:block;margin-top:20px;padding:14px;border-radius:12px;background:#8b5e3c;color:#fff;text-decoration:none;font-weight:650}
+  </style></head><body><main class="card"><div class="icon" id="icon">⏳</div><div class="title" id="title">正在执行…</div><div class="msg" id="msg">请保持代理和定位模块已启用</div><a class="btn" href="/">返回老王打卡</a></main><script>
+  const SAVE_API='https://gs-loc.apple.com/wloc-settings/save';
+  const p=new URLSearchParams(location.search);const action=p.get('action')||'set';
+  const title=document.getElementById('title'),msg=document.getElementById('msg'),icon=document.getElementById('icon');
+  (async()=>{try{let url;if(action==='clear'){url=SAVE_API+'?action=clear'}else{const lon=Number(p.get('lon')),lat=Number(p.get('lat'));if(!Number.isFinite(lon)||!Number.isFinite(lat)||Math.abs(lat)>90||Math.abs(lon)>180)throw new Error('快捷指令没有收到有效坐标');url=SAVE_API+'?lon='+lon+'&lat='+lat+'&acc=25'}const r=await fetch(url,{cache:'no-store'});const d=await r.json();if(!d.success)throw new Error(d.error||'执行失败');icon.textContent='✅';title.className='title ok';title.textContent=action==='clear'?'已恢复真实定位':'定位切换成功';msg.textContent=action==='clear'?'保存坐标已清除；iOS 26+ 请重启设备清除系统缓存。':'已切换到 '+(p.get('name')||'收藏地点')+'；iOS 26+ 可能需要重启设备。'}catch(e){icon.textContent='❌';title.className='title bad';title.textContent='执行失败';msg.textContent=(e&&e.message?e.message:'未知错误')+'。请检查 VPN、模块和 HTTPS 解密。'}})();
+  </script></body></html>`;
+}
