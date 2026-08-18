@@ -1,0 +1,11 @@
+{
+  "name": "laowang-checkin-pages",
+  "compatibility_date": "2026-08-05",
+  "pages_build_output_dir": "./dist",
+  "kv_namespaces": [
+    {
+      "binding": "APP_DATA",
+      "id": "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+    }
+  ]
+}
