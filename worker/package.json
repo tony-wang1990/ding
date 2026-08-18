@@ -1,13 +1,15 @@
 {
   "type": "module",
   "scripts": {
-    "test": "node --test 'test/*.test.mjs'",
-    "dev": "npx wrangler dev",
-    "deploy": "npx wrangler deploy --minify",
-    "pages:dev": "npx wrangler pages dev --port 8787 -c wrangler.pages.jsonc",
-    "pages:deploy": "npx wrangler pages deploy -c wrangler.pages.jsonc"
+    "sync:assets": "node scripts/sync-module-assets.mjs",
+    "test": "node --test test/*.test.mjs test/*.test.js",
+    "dev": "npm run sync:assets && npx wrangler@4.123.0 dev",
+    "deploy": "npm run sync:assets && npm test && npx wrangler@4.123.0 deploy --minify",
+    "build:pages": "npm run sync:assets && npx wrangler@4.123.0 deploy --dry-run --outdir .pages-bundle && node scripts/prepare-pages.mjs",
+    "pages:dev": "npm run build:pages && npx wrangler@4.123.0 pages dev --cwd pages --port 8787",
+    "pages:deploy": "npm test && npm run build:pages && npx wrangler@4.123.0 pages deploy --cwd pages"
   },
   "dependencies": {
-    "hono": "^4.10.6"
+    "hono": "4.13.2"
   }
 }
