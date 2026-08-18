@@ -3,13 +3,38 @@ import { getPageHtml } from "./page.js";
 import { getAdminHtml } from "./admin-page.js";
 import { getQuickPageHtml } from "./quick-page.js";
 import { loadConfig, saveConfig } from "./config.js";
-import { clearSessionCookie, createSession, isAdmin, sessionCookie } from "./auth.js";
+import {
+  adminSecretsReady,
+  clearLoginFailures,
+  clearSessionCookie,
+  createSession,
+  isAdmin,
+  loginRateStatus,
+  recordLoginFailure,
+  sessionCookie,
+} from "./auth.js";
 import { parseCoords, gcj02ToWgs84, toWgs84, round6, inRange } from "./parse.js";
+import wlocScript from "./assets/wloc.js.txt";
+import settingsScript from "./assets/wloc-settings.js.txt";
 
 const app = new Hono();
+const searchAttempts = new Map();
+let nextSearchAt = 0;
+
+app.use("*", async (c, next) => {
+  await next();
+  c.header("X-Content-Type-Options", "nosniff");
+  c.header("X-Frame-Options", "DENY");
+  c.header("Referrer-Policy", "strict-origin-when-cross-origin");
+  c.header("Permissions-Policy", "geolocation=(self), camera=(), microphone=()");
+  if (c.req.path.startsWith("/admin") || c.req.path.startsWith("/api/admin")) {
+    c.header("Cache-Control", "no-store");
+  }
+});
 
 app.get("/", async (c) => {
-  return c.html(getPageHtml(await loadConfig(c.env)));
+  const config = await loadConfig(c.env);
+  return c.html(getPageHtml(config, new URL(c.req.url).origin));
 });
 
 app.get("/admin", (c) => c.html(getAdminHtml()));
@@ -21,9 +46,20 @@ app.get("/api/config", async (c) => {
 });
 
 app.post("/api/admin/login", async (c) => {
+  if (!adminSecretsReady(c.env)) return c.json({ error: "后台 Secret 尚未配置完整" }, 503);
+  const identifier = c.req.header("CF-Connecting-IP") || c.req.header("X-Forwarded-For") || "unknown";
+  const rate = await loginRateStatus(c.env, identifier);
+  if (!rate.allowed) {
+    c.header("Retry-After", String(rate.retryAfter));
+    return c.json({ error: "尝试次数过多，请稍后再试" }, 429);
+  }
   const body = await c.req.json().catch(() => ({}));
   const token = await createSession(String(body.password || ""), c.env);
-  if (!token) return c.json({ error: "密码错误" }, 401);
+  if (!token) {
+    await recordLoginFailure(c.env, identifier);
+    return c.json({ error: "密码错误" }, 401);
+  }
+  await clearLoginFailures(c.env, identifier);
   c.header("Set-Cookie", sessionCookie(token));
   return c.json({ success: true });
 });
@@ -48,15 +84,30 @@ app.put("/api/admin/config", async (c) => {
 app.get("/api/search", async (c) => {
   const q = String(c.req.query("q") || "").trim().slice(0, 80);
   if (q.length < 2) return c.json([]);
+  const rate = await acquireSearchSlot(c);
+  if (!rate.allowed) {
+    c.header("Retry-After", String(rate.retryAfter));
+    return c.json({ error: "搜索过于频繁，请稍后重试", retryAfter: rate.retryAfter }, 429);
+  }
   const url = new URL("https://nominatim.openstreetmap.org/search");
   url.searchParams.set("format", "jsonv2");
   url.searchParams.set("limit", "6");
   url.searchParams.set("accept-language", "zh-CN");
   url.searchParams.set("q", q);
-  const resp = await fetch(url, {
-    headers: { "User-Agent": "LaoWangCheckin/1.0 (ding.199060.xyz)" },
-    cf: { cacheTtl: 300, cacheEverything: true },
-  });
+  const origin = new URL(c.req.url).origin;
+  let resp;
+  try {
+    resp = await fetch(url, {
+      signal: AbortSignal.timeout(8000),
+      headers: {
+        "User-Agent": `LaoWangCheckin/1.1 (+${origin})`,
+        "Referer": `${origin}/`,
+      },
+      cf: { cacheTtl: 86400, cacheEverything: true },
+    });
+  } catch {
+    return c.json({ error: "搜索服务连接超时，请稍后重试" }, 502);
+  }
   if (!resp.ok) return c.json({ error: "搜索服务暂时不可用" }, 502);
   const data = await resp.json();
   return c.json(data.map((p) => ({
@@ -64,21 +115,20 @@ app.get("/api/search", async (c) => {
     lat: Number(p.lat),
     lon: Number(p.lon),
     type: p.type || "",
-  })));
+  })).filter((p) => p.name && inRange(p.lat, p.lon)));
 });
 
-app.get("/scripts/:name", async (c) => {
+app.get("/scripts/:name", (c) => {
   const files = {
-    "wloc.js": "https://cdn.jsdelivr.net/gh/Yu9191/wloc@main/dist/wloc.js",
-    "wloc-settings.js": "https://cdn.jsdelivr.net/gh/Yu9191/wloc@main/dist/wloc-settings.js",
+    "wloc.js": wlocScript,
+    "wloc-settings.js": settingsScript,
   };
-  const upstream = files[c.req.param("name")];
-  if (!upstream) return c.text("Not found", 404);
-  const resp = await fetch(upstream, { cf: { cacheTtl: 86400, cacheEverything: true } });
-  if (!resp.ok) return c.text("脚本暂时不可用", 502);
+  const script = files[c.req.param("name")];
+  if (!script) return c.text("Not found", 404);
   c.header("content-type", "application/javascript; charset=utf-8");
-  c.header("cache-control", "public, max-age=3600");
-  return c.body(await resp.text());
+  c.header("cache-control", "public, max-age=86400");
+  c.header("Access-Control-Allow-Origin", "*");
+  return c.body(script);
 });
 
 app.get("/modules/wloc.module", (c) => {
@@ -92,7 +142,7 @@ app.get("/modules/wloc.module", (c) => {
 //   返回 {lat, lon, name}; 高德/苹果地图(中国大陆均为 GCJ-02)自动转 WGS84; 境外坐标自动跳过(out_of_china)。cs=none 可强制不转换。
 //   不带 format=json 时返回纯文本 "lat=..&lon=.." 片段。
 app.get("/api/parse", async (c) => {
-  const raw = c.req.query("u") || "";
+  const raw = String(c.req.query("u") || "").slice(0, 4096);
   const cs = (c.req.query("cs") || "").toLowerCase();
   const fmt = (c.req.query("format") || "").toLowerCase();
   try {
@@ -119,7 +169,39 @@ app.get("/api/parse", async (c) => {
 // 兜底 500 也要带 CORS —— 否则快捷指令那边看到的是跨域错误, 而不是真正的原因。
 app.onError((e, c) => {
   c.header("Access-Control-Allow-Origin", "*");
-  return c.text(`${e && e.message ? e.message : e}`, 500);
+  return c.json({ error: "服务暂时不可用" }, 500);
 });
+
+async function acquireSearchSlot(c) {
+  const now = Date.now();
+  const identifier = c.req.header("CF-Connecting-IP") || c.req.header("X-Forwarded-For") || "unknown";
+  const previous = searchAttempts.get(identifier) || [];
+  const recent = previous.filter((time) => now - time < 60_000);
+  if (recent.length >= 10) {
+    searchAttempts.set(identifier, recent);
+    return { allowed: false, retryAfter: Math.max(1, Math.ceil((60_000 - (now - recent[0])) / 1000)) };
+  }
+  if (now < nextSearchAt) return { allowed: false, retryAfter: 1 };
+
+  if (c.env?.APP_DATA) {
+    try {
+      const saved = Number(await c.env.APP_DATA.get("nominatim_next_at"));
+      if (Number.isFinite(saved) && now < saved) {
+        return { allowed: false, retryAfter: Math.max(1, Math.ceil((saved - now) / 1000)) };
+      }
+      await c.env.APP_DATA.put("nominatim_next_at", String(now + 1100), { expirationTtl: 60 });
+    } catch {}
+  }
+
+  nextSearchAt = now + 1100;
+  recent.push(now);
+  searchAttempts.set(identifier, recent);
+  if (searchAttempts.size > 1000) {
+    for (const [key, times] of searchAttempts) {
+      if (!times.some((time) => now - time < 60_000)) searchAttempts.delete(key);
+    }
+  }
+  return { allowed: true, retryAfter: 0 };
+}
 
 export default app;

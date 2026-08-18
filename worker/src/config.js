@@ -2,9 +2,8 @@ export const DEFAULT_CONFIG = {
   brandName: "老王打卡",
   domain: "ding.199060.xyz",
   announcement: "请选择目标地点并储存到设备。首次使用请先完成模块和证书安装。",
-  shortcutSetUrl: "https://www.icloud.com/shortcuts/6b091740311d492683c882200658bd80",
-  shortcutClearUrl: "https://www.icloud.com/shortcuts/c51df1683d2b4954b2732addef94cae8",
-  publicAccess: true,
+  shortcutSetUrl: "https://www.icloud.com/shortcuts/03bab2c213834b288128bbb344d24659",
+  shortcutClearUrl: "https://www.icloud.com/shortcuts/bb0fb2e7b9e34f959e09f85ec23508cb",
   commonPlaces: [
     { name: "北京天安门", lat: 39.908823, lon: 116.39747 },
     { name: "上海外滩", lat: 31.24001, lon: 121.490317 },
@@ -14,9 +13,14 @@ export const DEFAULT_CONFIG = {
 };
 
 export async function loadConfig(env) {
-  if (!env?.APP_DATA) return DEFAULT_CONFIG;
-  const saved = await env.APP_DATA.get("site_config", "json");
-  return sanitizeConfig({ ...DEFAULT_CONFIG, ...(saved || {}) });
+  if (!env?.APP_DATA) return sanitizeConfig(DEFAULT_CONFIG);
+  try {
+    const saved = await env.APP_DATA.get("site_config", "json");
+    return sanitizeConfig({ ...DEFAULT_CONFIG, ...(saved || {}) });
+  } catch {
+    // KV 短暂不可用时，公开首页仍可用默认配置；后台保存仍会明确报错。
+    return sanitizeConfig(DEFAULT_CONFIG);
+  }
 }
 
 export async function saveConfig(env, value) {
@@ -29,16 +33,15 @@ export async function saveConfig(env, value) {
 export function sanitizeConfig(value) {
   const clean = { ...DEFAULT_CONFIG };
   clean.brandName = text(value.brandName, 40) || DEFAULT_CONFIG.brandName;
-  clean.domain = text(value.domain, 120) || DEFAULT_CONFIG.domain;
+  clean.domain = safeHost(value.domain) || DEFAULT_CONFIG.domain;
   clean.announcement = text(value.announcement, 300);
   clean.shortcutSetUrl = safeUrl(value.shortcutSetUrl);
   clean.shortcutClearUrl = safeUrl(value.shortcutClearUrl);
-  clean.publicAccess = value.publicAccess !== false;
   clean.commonPlaces = Array.isArray(value.commonPlaces)
     ? value.commonPlaces.slice(0, 30).map((p) => ({
         name: text(p?.name, 40),
-        lat: Number(p?.lat),
-        lon: Number(p?.lon),
+        lat: coordinate(p?.lat),
+        lon: coordinate(p?.lon),
       })).filter((p) => p.name && inRange(p.lat, p.lon))
     : DEFAULT_CONFIG.commonPlaces;
   return clean;
@@ -57,6 +60,23 @@ function safeUrl(value) {
   } catch {
     return "";
   }
+}
+
+function safeHost(value) {
+  const raw = text(value, 160);
+  if (!raw) return "";
+  try {
+    const url = new URL(raw.includes("://") ? raw : `https://${raw}`);
+    if (url.protocol !== "https:" || url.username || url.password) return "";
+    return url.host;
+  } catch {
+    return "";
+  }
+}
+
+function coordinate(value) {
+  if (value == null || String(value).trim() === "") return NaN;
+  return Number(value);
 }
 
 function inRange(lat, lon) {

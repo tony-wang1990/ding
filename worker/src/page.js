@@ -1,7 +1,9 @@
 import { GCJ_BROWSER_JS } from "./gcj-browser.js";
 
-export function getPageHtml(config = {}) {
+export function getPageHtml(config = {}, requestOrigin = "") {
   const publicConfig = JSON.stringify(config).replace(/</g, "\\u003c");
+  const siteOrigin = String(requestOrigin || `https://${config.domain || "ding.199060.xyz"}`).replace(/\/$/, "");
+  const moduleUrl = `${siteOrigin}/modules/wloc.module`;
   return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -9,7 +11,7 @@ export function getPageHtml(config = {}) {
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>${escapeHtml(config.brandName || "老王打卡")} · iOS 定位</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="WLOC">
+<meta name="apple-mobile-web-app-title" content="${escapeHtml(config.brandName || "老王打卡")}">
 <!-- 内联图标: 没有它浏览器每次加载都会去要 /favicon.ico 并拿到 404 -->
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E%F0%9F%93%8D%3C/text%3E%3C/svg%3E">
 <!-- integrity 为 Leaflet 官方在 leafletjs.com/download.html 公布的 SRI 值,
@@ -136,12 +138,12 @@ body { font-family:-apple-system,system-ui,"PingFang SC","SF Pro","Helvetica Neu
   <div class="card">
     <h3>安装与恢复</h3>
     <div class="install-grid">
-      <a class="btn btn-primary" style="text-decoration:none;text-align:center" href="shadowrocket://install?module=${encodeURIComponent(`https://${config.domain || "ding.199060.xyz"}/modules/wloc.module`)}">安装小火箭模块</a>
+      <a class="btn btn-primary" style="text-decoration:none;text-align:center" href="shadowrocket://install?module=${encodeURIComponent(moduleUrl)}">安装小火箭模块</a>
       <a class="btn btn-secondary" style="text-decoration:none;text-align:center" href="/modules/wloc.module">复制模块地址</a>
-      <a class="btn btn-secondary" id="setShortcut" style="text-decoration:none;text-align:center" href="${escapeHtml(config.shortcutSetUrl || "https://www.icloud.com/shortcuts/6b091740311d492683c882200658bd80")}">安装一键切换快捷指令</a>
-      <a class="btn btn-danger" id="clearShortcut" style="text-decoration:none;text-align:center" href="${escapeHtml(config.shortcutClearUrl || "https://www.icloud.com/shortcuts/c51df1683d2b4954b2732addef94cae8")}">一键恢复真实定位</a>
+      <a class="btn btn-secondary" id="setShortcut" style="text-decoration:none;text-align:center" href="${escapeHtml(config.shortcutSetUrl || "https://www.icloud.com/shortcuts/03bab2c213834b288128bbb344d24659")}">安装一键切换快捷指令</a>
+      <a class="btn btn-danger" id="clearShortcut" style="text-decoration:none;text-align:center" href="${escapeHtml(config.shortcutClearUrl || "https://www.icloud.com/shortcuts/bb0fb2e7b9e34f959e09f85ec23508cb")}">安装恢复定位快捷指令</a>
     </div>
-    <div style="font-size:11px;color:var(--gray);margin-top:9px">收藏地点可直接点“一键切换”；恢复按钮会立即清除保存坐标。</div>
+    <div style="font-size:11px;color:var(--gray);margin-top:9px">上面两项是快捷指令安装入口。已经安装后，请从“快捷指令”App、桌面或小组件运行；网页内立即清除请使用下方“清除数据”。</div>
   </div>
   <div class="card">
     <div class="fav-header">
@@ -176,6 +178,7 @@ body { font-family:-apple-system,system-ui,"PingFang SC","SF Pro","Helvetica Neu
       <button class="btn btn-secondary" style="flex:none;min-width:56px" onclick="searchPlace()">搜索</button>
     </div>
     <div id="suggestions" class="suggestions"></div>
+    <div style="font-size:11px;color:var(--gray);margin-top:7px">输入时只联想本机收藏、历史和公共地点；点击“搜索”才会查询网络。搜索数据 © OpenStreetMap contributors。</div>
   </div>
   <div class="card">
     <div class="fav-header"><h3>最近定位</h3><button class="btn btn-sm btn-secondary" onclick="clearHistory()">清空</button></div>
@@ -213,6 +216,7 @@ const HISTORY_KEY = 'laowang_location_history';
 // fromDisplay 两个函数里, 其它地方一律不碰。
 let lat = 22.544577, lon = 113.94114;
 let selected = false;
+let selectedName = "地图选点";
 let activeLon = null, activeLat = null;
 let layerIsGcj = false;
 
@@ -227,7 +231,7 @@ const map = L.map('map').setView([lat, lon], 13);
 const tiles = {
   satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {maxZoom:19, attribution:'ArcGIS'}),
   wgs84: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {maxZoom:19, attribution:'ArcGIS WGS84'}),
-  standard: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, attribution:'\\u00a9 OSM'}),
+  standard: L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>'}),
   dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {maxZoom:19, attribution:'\\u00a9 Carto'}),
   amap: L.tileLayer('https://webst0{s}.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}', {maxZoom:18, subdomains:'1234', attribution:'\\u00a9 高德'}),
   voyager: L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {maxZoom:19, attribution:'\\u00a9 Carto'})
@@ -254,19 +258,25 @@ map.on('click', e => { setPosFromDisplay(e.latlng.lat, e.latlng.lng); });
 
 function setPosFromDisplay(dLat, dLon) {
   const w = fromDisplay(dLat, dLon);
-  setPos(w.lat, w.lon);
+  setPos(w.lat, w.lon, '地图选点');
 }
 
 // 参数恒为 WGS84。
-function setPos(newLat, newLon) {
+function setPos(newLat, newLon, name) {
+  newLat = Number(newLat); newLon = Number(newLon);
+  if (!Number.isFinite(newLat) || !Number.isFinite(newLon) || Math.abs(newLat) > 90 || Math.abs(newLon) > 180) {
+    toast('坐标超出合法范围', 3000); return false;
+  }
   lat = newLat; lon = newLon; selected = true;
+  selectedName = name || '地图选点';
   const d = toDisplay(lat, lon);
   marker.setLatLng([d.lat, d.lon]);
   document.getElementById('coords').textContent = '经度 ' + lon.toFixed(6) + '  纬度 ' + lat.toFixed(6);
+  return true;
 }
 
-function moveTo(newLat, newLon, zoom) {
-  setPos(newLat, newLon);
+function moveTo(newLat, newLon, zoom, name) {
+  if (!setPos(newLat, newLon, name)) return;
   const d = toDisplay(lat, lon);
   map.setView([d.lat, d.lon], zoom || 15);
 }
@@ -283,10 +293,45 @@ function showError(show) {
 
 /* ---- Favorites (localStorage) ---- */
 function getFavs() {
-  try { return JSON.parse(localStorage.getItem(FAV_KEY)) || []; } catch(e) { return []; }
+  let raw;
+  try { raw = JSON.parse(localStorage.getItem(FAV_KEY)) || []; } catch(e) { raw = []; }
+  if (!Array.isArray(raw)) raw = [];
+  let changed = false;
+  const favs = raw.map((f, i) => {
+    const latValue = Number(f && f.lat), lonValue = Number(f && f.lon);
+    if (!Number.isFinite(latValue) || !Number.isFinite(lonValue) || Math.abs(latValue) > 90 || Math.abs(lonValue) > 180) {
+      changed = true; return null;
+    }
+    const id = f && typeof f.id === 'string' && f.id ? f.id : makeFavId(f, i);
+    const item = { id, name:String((f && f.name) || '未命名地点').slice(0, 30), lon:lonValue, lat:latValue, time:(f && f.time) || new Date().toISOString() };
+    if (!f || f.id !== id || f.lat !== latValue || f.lon !== lonValue) changed = true;
+    return item;
+  }).filter(Boolean);
+  if (changed) saveFavs(favs);
+  migrateDefaultFavorite(favs);
+  return favs;
 }
 function saveFavs(favs) {
   localStorage.setItem(FAV_KEY, JSON.stringify(favs));
+}
+
+function makeFavId(f, i) {
+  const seed = String((f && f.time) || '') + '|' + String(f && f.lat) + '|' + String(f && f.lon) + '|' + i;
+  let hash = 2166136261;
+  for (let n=0;n<seed.length;n++) { hash ^= seed.charCodeAt(n); hash = Math.imul(hash, 16777619); }
+  return 'fav-' + (hash >>> 0).toString(36) + '-' + Date.now().toString(36);
+}
+
+function migrateDefaultFavorite(favs) {
+  if (!favs.length) { localStorage.removeItem(DEFAULT_FAV_KEY); return ''; }
+  const stored = localStorage.getItem(DEFAULT_FAV_KEY);
+  if (stored && favs.some(f => f.id === stored)) return stored;
+  if (stored && /^\\d+$/.test(stored)) {
+    const legacy = favs[Number(stored)];
+    if (legacy) { localStorage.setItem(DEFAULT_FAV_KEY, legacy.id); return legacy.id; }
+  }
+  localStorage.setItem(DEFAULT_FAV_KEY, favs[0].id);
+  return favs[0].id;
 }
 
 function renderFavs() {
@@ -298,8 +343,9 @@ function renderFavs() {
     el.innerHTML = '<div class="fav-empty">暂无收藏，选好位置后点击「收藏位置」</div>';
     return;
   }
+  const defaultId = migrateDefaultFavorite(favs);
   el.innerHTML = favs.map((f, i) => {
-    const isDefault = localStorage.getItem(DEFAULT_FAV_KEY) === String(i) || (!localStorage.getItem(DEFAULT_FAV_KEY) && i === 0);
+    const isDefault = f.id === defaultId;
     const isActive = activeLon !== null && Math.abs(f.lon - activeLon) < 0.000001 && Math.abs(f.lat - activeLat) < 0.000001;
     return '<div class="fav-item" onclick="loadFav(' + i + ')">' +
       '<div class="fav-info">' +
@@ -315,7 +361,7 @@ function renderFavs() {
 }
 
 function escHtml(s) {
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 function addFav() {
@@ -334,7 +380,7 @@ function confirmFav() {
   const name = document.getElementById('favNameInput').value.trim();
   if (!name) { toast('请输入备注名称'); return; }
   const favs = getFavs();
-  favs.push({ name, lon, lat, time: new Date().toISOString() });
+  favs.push({ id:(typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : makeFavId({name,lon,lat,time:Date.now()}, favs.length)), name, lon, lat, time: new Date().toISOString() });
   saveFavs(favs);
   closeFavModal();
   renderFavs();
@@ -344,7 +390,7 @@ function confirmFav() {
 function loadFav(i) {
   const favs = getFavs();
   if (!favs[i]) return;
-  moveTo(favs[i].lat, favs[i].lon, 15);
+  moveTo(favs[i].lat, favs[i].lon, 15, favs[i].name);
   toast(favs[i].name + ' (' + favs[i].lon.toFixed(4) + ', ' + favs[i].lat.toFixed(4) + ')');
 }
 
@@ -357,7 +403,7 @@ async function quickSwitchFav(i) {
     const d = await r.json();
     if (!d.success) throw new Error(d.error || '写入失败');
     activeLon = f.lon; activeLat = f.lat;
-    moveTo(f.lat, f.lon, 16);
+    moveTo(f.lat, f.lon, 16, f.name);
     document.getElementById('activeValue').textContent = '经度 ' + f.lon.toFixed(6) + '  纬度 ' + f.lat.toFixed(6) + '  精度 25m';
     renderFavs(); addHistory(f.name);
     toast('✓ 已一键切换到 ' + f.name, 3500);
@@ -365,16 +411,19 @@ async function quickSwitchFav(i) {
 }
 
 function setDefaultFav(i) {
-  if (!getFavs()[i]) return;
-  localStorage.setItem(DEFAULT_FAV_KEY, String(i));
+  const f = getFavs()[i];
+  if (!f) return;
+  localStorage.setItem(DEFAULT_FAV_KEY, f.id);
   renderFavs(); toast('已设为快捷指令默认地点');
 }
 
 function runDefaultFavorite() {
   const favs = getFavs();
   if (!favs.length) return toast('请先收藏一个地点', 4000);
-  let i = parseInt(localStorage.getItem(DEFAULT_FAV_KEY) || '0', 10);
-  if (!favs[i]) i = 0;
+  const defaultId = migrateDefaultFavorite(favs);
+  let i = favs.findIndex(f => f.id === defaultId);
+  if (i < 0) i = 0;
+  history.replaceState(null, '', location.pathname);
   quickSwitchFav(i);
 }
 
@@ -382,8 +431,13 @@ function delFav(i) {
   const favs = getFavs();
   if (!favs[i]) return;
   const name = favs[i].name;
+  const deletedId = favs[i].id;
   favs.splice(i, 1);
   saveFavs(favs);
+  if (localStorage.getItem(DEFAULT_FAV_KEY) === deletedId) {
+    if (favs.length) localStorage.setItem(DEFAULT_FAV_KEY, favs[0].id);
+    else localStorage.removeItem(DEFAULT_FAV_KEY);
+  }
   renderFavs();
   toast('已删除: ' + name);
 }
@@ -391,6 +445,7 @@ function delFav(i) {
 function clearAllFav() {
   if (!confirm('确定清空所有收藏？')) return;
   saveFavs([]);
+  localStorage.removeItem(DEFAULT_FAV_KEY);
   renderFavs();
   toast('已清空所有收藏');
 }
@@ -404,11 +459,17 @@ function renderCommonPlaces() {
 function loadCommon(i) {
   const p = (SITE_CONFIG.commonPlaces || [])[i];
   if (!p) return;
-  moveTo(Number(p.lat), Number(p.lon), 16);
+  moveTo(Number(p.lat), Number(p.lon), 16, p.name);
   toast('已选择：' + p.name);
 }
 function getHistory() {
-  try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; } catch(e) { return []; }
+  let raw;
+  try { raw = JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; } catch(e) { raw = []; }
+  if (!Array.isArray(raw)) return [];
+  return raw.map(x => ({
+    name:String((x && x.name) || '历史位置').slice(0, 80),
+    lat:Number(x && x.lat), lon:Number(x && x.lon), time:Number(x && x.time) || Date.now(),
+  })).filter(x => Number.isFinite(x.lat) && Number.isFinite(x.lon) && Math.abs(x.lat) <= 90 && Math.abs(x.lon) <= 180).slice(0, 20);
 }
 function addHistory(name) {
   const list = getHistory().filter(x => Math.abs(x.lat-lat)>0.000001 || Math.abs(x.lon-lon)>0.000001);
@@ -421,7 +482,7 @@ function renderHistory() {
   const list = getHistory();
   el.innerHTML = list.length ? list.map((x,i)=>'<div class="history-item"><div onclick="loadHistory('+i+')" style="cursor:pointer;flex:1"><b>'+escHtml(x.name)+'</b><br><span style="color:var(--gray)">'+x.lon.toFixed(6)+', '+x.lat.toFixed(6)+'</span></div><span style="color:var(--gray)">'+new Date(x.time).toLocaleDateString('zh-CN')+'</span></div>').join('') : '<div class="fav-empty">还没有定位记录</div>';
 }
-function loadHistory(i) { const x=getHistory()[i]; if(x){ moveTo(x.lat,x.lon,16); toast('已载入历史位置'); } }
+function loadHistory(i) { const x=getHistory()[i]; if(x){ moveTo(x.lat,x.lon,16,x.name); toast('已载入历史位置'); } }
 function clearHistory() { localStorage.removeItem(HISTORY_KEY); renderHistory(); }
 
 /* ---- Active location query ---- */
@@ -431,7 +492,7 @@ function queryActive() {
   fetch(SAVE_API + '?action=query', { method:'GET', mode:'cors', cache:'no-store' })
     .then(r => r.json())
     .then(d => {
-      if (d.success && d.longitude && d.latitude) {
+      if (d.success && d.longitude != null && d.latitude != null) {
         activeLon = parseFloat(d.longitude);
         activeLat = parseFloat(d.latitude);
         const rr = d.randomRadius || 0;
@@ -471,7 +532,8 @@ async function save() {
   btn.textContent = '储存中...'; btn.disabled = true;
   showError(false);
   try {
-    const radius = parseInt(document.getElementById('radiusInput').value) || 0;
+    const radius = Math.min(5000, Math.max(0, parseInt(document.getElementById('radiusInput').value, 10) || 0));
+    document.getElementById('radiusInput').value = radius;
     const r = await fetch(SAVE_API + '?lon=' + lon + '&lat=' + lat + '&acc=25&randomRadius=' + radius, {
       method: 'GET', mode: 'cors', cache: 'no-store'
     });
@@ -482,7 +544,7 @@ async function save() {
       document.getElementById('status').textContent = '\\u2713 已写入: ' + lon.toFixed(6) + ', ' + lat.toFixed(6) + ' \\u00b7 ' + new Date().toLocaleTimeString('zh-CN');
       document.getElementById('activeValue').textContent = '经度 ' + lon.toFixed(6) + '  纬度 ' + lat.toFixed(6) + '  精度 25m';
       renderFavs();
-      addHistory(document.getElementById('searchInput').value.trim() || '地图选点');
+      addHistory(selectedName || '地图选点');
       toast('\\u2713 坐标已写入设备，下次定位生效');
       setTimeout(() => { btn.textContent='储存到设备'; btn.className='btn btn-primary'; btn.disabled=false; }, 2500);
     } else {
@@ -499,7 +561,7 @@ function locateMe() {
   if (!navigator.geolocation) return toast('浏览器不支持定位');
   toast('获取位置中...');
   navigator.geolocation.getCurrentPosition(
-    pos => { moveTo(pos.coords.latitude, pos.coords.longitude, 16); toast('已获取当前位置'); },
+    pos => { moveTo(pos.coords.latitude, pos.coords.longitude, 16, '当前位置'); toast('已获取当前位置'); },
     err => toast('定位失败: ' + err.message, 3000),
     { enableHighAccuracy:true, timeout:10000 }
   );
@@ -549,14 +611,14 @@ async function parseUrl() {
       toast(data && data.error ? data.error : '无法解析坐标，请检查链接格式', 3000);
       return;
     }
-    moveTo(data.lat, data.lon, 15);
+    moveTo(data.lat, data.lon, 15, data.name || '地图链接');
     toast(data.name ? '已解析: ' + data.name : '已解析: ' + data.lon.toFixed(4) + ', ' + data.lat.toFixed(4));
     return;
   }
 
   const result = parseMapUrl(input);
   if (!result) { toast('无法解析坐标，请检查链接格式', 3000); return; }
-  moveTo(result.lat, result.lon, 15);
+  moveTo(result.lat, result.lon, 15, '坐标文本');
   toast('已解析: ' + result.lon.toFixed(4) + ', ' + result.lat.toFixed(4));
 }
 
@@ -567,35 +629,50 @@ async function searchPlace() {
   try {
     const r = await fetch('/api/search?q='+encodeURIComponent(q));
     const results = await r.json();
+    if (!r.ok || !Array.isArray(results)) { toast((results && results.error) || '搜索暂时不可用', 3000); return; }
     if (!results.length) { toast('未找到: ' + q, 3000); return; }
     const p = results[0];
-    moveTo(parseFloat(p.lat), parseFloat(p.lon), 15);
+    moveTo(parseFloat(p.lat), parseFloat(p.lon), 15, p.name || q);
     toast((p.name || '').slice(0, 40));
-    hideSuggestions();
+    showSuggestions(results);
   } catch(e) { toast('搜索失败', 3000); }
 }
 
 let suggestTimer = null;
-async function suggest() {
+function suggest() {
   const q = document.getElementById('searchInput').value.trim();
   if (q.length < 2) return hideSuggestions();
-  try {
-    const results = await (await fetch('/api/search?q='+encodeURIComponent(q))).json();
-    const el = document.getElementById('suggestions');
-    if (!Array.isArray(results) || !results.length) return hideSuggestions();
-    el.innerHTML = results.map((p,i)=>'<div class="suggestion" onclick="chooseSuggestion('+i+')">'+escHtml(p.name)+'</div>').join('');
-    el.dataset.items = JSON.stringify(results);
-    el.style.display = 'block';
-  } catch(e) { hideSuggestions(); }
+  const seen = new Set(), results = [];
+  const candidates = [
+    ...(SITE_CONFIG.commonPlaces || []),
+    ...getFavs(),
+    ...getHistory(),
+  ];
+  for (const item of candidates) {
+    const name = String(item.name || '');
+    const key = Number(item.lat).toFixed(6) + ',' + Number(item.lon).toFixed(6);
+    if (name.toLowerCase().includes(q.toLowerCase()) && !seen.has(key)) {
+      seen.add(key); results.push({ name, lat:Number(item.lat), lon:Number(item.lon), local:true });
+    }
+    if (results.length >= 6) break;
+  }
+  if (!results.length) return hideSuggestions();
+  showSuggestions(results);
+}
+function showSuggestions(results) {
+  const el = document.getElementById('suggestions');
+  el.innerHTML = results.map((p,i)=>'<div class="suggestion" onclick="chooseSuggestion('+i+')">'+escHtml(p.name)+'</div>').join('');
+  el.dataset.items = JSON.stringify(results);
+  el.style.display = 'block';
 }
 function chooseSuggestion(i) {
   const el=document.getElementById('suggestions');
   const p=JSON.parse(el.dataset.items||'[]')[i];
   if(!p)return;
   document.getElementById('searchInput').value=p.name;
-  moveTo(Number(p.lat),Number(p.lon),16); hideSuggestions(); toast('已选择地点');
+  moveTo(Number(p.lat),Number(p.lon),16,p.name); hideSuggestions(); toast('已选择地点');
 }
-function hideSuggestions(){document.getElementById('suggestions').style.display='none'}
+function hideSuggestions(){const el=document.getElementById('suggestions');el.style.display='none';el.dataset.items='[]'}
 
 document.addEventListener('paste', e => {
   const text = (e.clipboardData||window.clipboardData).getData('text');
