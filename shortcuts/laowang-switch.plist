@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>WFQuickActionSurfaces</key><array/>
+	<key>WFWorkflowActions</key>
+	<array>
+		<dict>
+			<key>WFWorkflowActionIdentifier</key><string>is.workflow.actions.comment</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>UUID</key><string>4a455b3e-626a-418f-bc4a-6875dc161e98</string>
+				<key>WFCommentActionText</key><string>打开老王打卡网页，读取当前 iPhone Safari 为 ding.199060.xyz 保存的 ★ 默认收藏，并自动写入该坐标。</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>WFWorkflowActionIdentifier</key><string>is.workflow.actions.notification</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>UUID</key><string>4e56ad7e-5fe4-4584-ad4c-dfd6e77f5864</string>
+				<key>WFNotificationActionBody</key><string>正在读取这台 iPhone 的 ★ 默认收藏</string>
+				<key>WFNotificationActionTitle</key><string>老王打卡</string>
+			</dict>
+		</dict>
+		<dict>
+			<key>WFWorkflowActionIdentifier</key><string>is.workflow.actions.openurl</string>
+			<key>WFWorkflowActionParameters</key>
+			<dict>
+				<key>UUID</key><string>5a41d3b1-bfb3-4978-818c-d43658e161ee</string>
+				<key>WFInput</key><string>https://ding.199060.xyz/?quick=default</string>
+			</dict>
+		</dict>
+	</array>
+	<key>WFWorkflowClientVersion</key><string>4711</string>
+	<key>WFWorkflowHasOutputFallback</key><false/>
+	<key>WFWorkflowHasShortcutInputVariables</key><false/>
+	<key>WFWorkflowIcon</key>
+	<dict>
+		<key>WFWorkflowIconGlyphNumber</key><integer>61440</integer>
+		<key>WFWorkflowIconStartColor</key><integer>-1153328</integer>
+	</dict>
+	<key>WFWorkflowImportQuestions</key><array/>
+	<key>WFWorkflowInputContentItemClasses</key><array/>
+	<key>WFWorkflowMinimumClientVersion</key><integer>900</integer>
+	<key>WFWorkflowMinimumClientVersionString</key><string>900</string>
+	<key>WFWorkflowOutputContentItemClasses</key><array/>
+	<key>WFWorkflowTypes</key><array><string>NCWidget</string></array>
+</dict>
+</plist>
